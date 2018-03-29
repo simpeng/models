@@ -223,7 +223,8 @@ def main(argv):
                       resnet_size=32,
                       train_epochs=250,
                       epochs_between_evals=10,
-                      batch_size=128)
+                      batch_size=128,
+                      profiling_dir='./')
 
   flags = parser.parse_args(args=argv[1:])
 

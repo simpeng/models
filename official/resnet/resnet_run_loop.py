@@ -348,41 +348,48 @@ def resnet_main(flags, model_function, input_function):
           'version': flags.version,
       })
 
-  for _ in range(flags.train_epochs // flags.epochs_between_evals):
-    train_hooks = hooks_helper.get_train_hooks(
+  # pengwa: use profileContext since the model is using high_level API, session is hidden. 
+  # https://github.com/tensorflow/tensorflow/tree/master/tensorflow/core/profiler
+  profiling_folder = "./"
+  if flags.profiling_dir:
+    profiling_folder = flags.profiling_dir
+  with tf.contrib.tfprof.ProfileContext(profiling_folder) as pctx:
+  # pengwa, modified part ends
+    for _ in range(flags.train_epochs // flags.epochs_between_evals):
+      train_hooks = hooks_helper.get_train_hooks(
         flags.hooks,
         batch_size=flags.batch_size,
         benchmark_log_dir=flags.benchmark_log_dir)
 
-    print('Starting a training cycle.')
+      print('Starting a training cycle.')
 
-    def input_fn_train():
-      return input_function(True, flags.data_dir, flags.batch_size,
+      def input_fn_train():
+        return input_function(True, flags.data_dir, flags.batch_size,
                             flags.epochs_between_evals,
                             flags.num_parallel_calls, flags.multi_gpu)
 
-    classifier.train(input_fn=input_fn_train, hooks=train_hooks,
+      classifier.train(input_fn=input_fn_train, hooks=train_hooks,
                      max_steps=flags.max_train_steps)
 
-    print('Starting to evaluate.')
-    # Evaluate the model and print results
-    def input_fn_eval():
-      return input_function(False, flags.data_dir, flags.batch_size,
+      print('Starting to evaluate.')
+      # Evaluate the model and print results
+      def input_fn_eval():
+        return input_function(False, flags.data_dir, flags.batch_size,
                             1, flags.num_parallel_calls, flags.multi_gpu)
 
-    # flags.max_train_steps is generally associated with testing and profiling.
-    # As a result it is frequently called with synthetic data, which will
-    # iterate forever. Passing steps=flags.max_train_steps allows the eval
-    # (which is generally unimportant in those circumstances) to terminate.
-    # Note that eval will run for max_train_steps each loop, regardless of the
-    # global_step count.
-    eval_results = classifier.evaluate(input_fn=input_fn_eval,
+      # flags.max_train_steps is generally associated with testing and profiling.
+      # As a result it is frequently called with synthetic data, which will
+      # iterate forever. Passing steps=flags.max_train_steps allows the eval
+      # (which is generally unimportant in those circumstances) to terminate.
+      # Note that eval will run for max_train_steps each loop, regardless of the
+      # global_step count.
+      eval_results = classifier.evaluate(input_fn=input_fn_eval,
                                        steps=flags.max_train_steps)
-    print(eval_results)
+      print(eval_results)
 
-    if flags.benchmark_log_dir is not None:
-      benchmark_logger = logger.BenchmarkLogger(flags.benchmark_log_dir)
-      benchmark_logger.log_estimator_evaluation_result(eval_results)
+      if flags.benchmark_log_dir is not None:
+        benchmark_logger = logger.BenchmarkLogger(flags.benchmark_log_dir)
+        benchmark_logger.log_estimator_evaluation_result(eval_results)
 
 
 class ResnetArgParser(argparse.ArgumentParser):
@@ -408,4 +415,9 @@ class ResnetArgParser(argparse.ArgumentParser):
         choices=resnet_size_choices,
         help='[default: %(default)s] The size of the ResNet model to use.',
         metavar='<RS>' if resnet_size_choices is None else None
+    )
+
+    self.add_argument(
+        '--profiling_dir', '-pd', type=str, default='./',
+        help='path to place profiling file'
     )
